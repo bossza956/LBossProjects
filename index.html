@@ -1,0 +1,1148 @@
+<!DOCTYPE html>
+<html lang="th">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Creative Flow Sandbox — Cloud Sync Mode</title>
+    <!-- Tailwind CSS CDN -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    <!-- Lucide Icons -->
+    <script src="https://unpkg.com/lucide@latest"></script>
+    <!-- Inter & Noto Sans Thai Fonts -->
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&family=Noto+Sans+Thai:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+    <script>
+        tailwind.config = {
+            theme: {
+                extend: {
+                    fontFamily: {
+                        sans: ['Inter', 'Noto Sans Thai', 'sans-serif'],
+                    }
+                }
+            }
+        }
+    </script>
+    <style>
+        body {
+            font-family: 'Inter', 'Noto Sans Thai', sans-serif;
+            background-color: #f8fafc;
+        }
+        .dragging {
+            opacity: 0.5;
+            border-style: dashed !important;
+            border-color: #6366f1 !important;
+        }
+    </style>
+</head>
+<body class="text-zinc-900 min-h-screen flex flex-col">
+
+    <!-- Toast Save Notification -->
+    <div id="toast" class="fixed bottom-6 right-6 bg-zinc-900 text-white text-xs font-medium px-4 py-2.5 rounded-xl shadow-lg transition-all duration-300 opacity-0 translate-y-2 pointer-events-none z-50 flex items-center gap-1.5">
+        <span class="w-2 h-2 bg-emerald-500 rounded-full animate-ping"></span>
+        <span id="toast-text">กำลังซิงก์ข้อมูล...</span>
+    </div>
+
+    <!-- Layout Grid -->
+    <div class="grid grid-cols-1 lg:grid-cols-4 min-h-screen">
+        
+        <!-- SIDEBAR: Project Manager -->
+        <div class="lg:col-span-1 border-b lg:border-b-0 lg:border-r border-zinc-200 bg-white p-6 flex flex-col justify-between shadow-[1px_0_5px_rgba(0,0,0,0.01)]">
+            <div class="space-y-6">
+                <!-- Logo Header -->
+                <div class="flex items-center space-x-2.5">
+                    <div class="w-9 h-9 rounded-xl bg-gradient-to-tr from-violet-600 via-indigo-600 to-cyan-500 flex items-center justify-center text-white shadow-md">
+                        <i data-lucide="sparkles" class="w-4 h-4"></i>
+                    </div>
+                    <div>
+                        <h1 class="font-bold text-sm tracking-tight text-zinc-900">Creative Flow</h1>
+                        <p class="text-[10px] text-zinc-400 font-semibold uppercase tracking-wider">Cloud Sandbox</p>
+                    </div>
+                </div>
+
+                <!-- Add Project Action Button -->
+                <button onclick="createNewProject()" class="w-full inline-flex items-center justify-center rounded-xl bg-indigo-600 px-4 py-2.5 text-xs font-bold text-white hover:bg-indigo-700 transition-all cursor-pointer shadow-md shadow-indigo-100">
+                    <i data-lucide="folder-plus" class="w-4 h-4 mr-1.5"></i> สร้างโปรเจกต์ใหม่
+                </button>
+
+                <!-- Active Projects List -->
+                <div class="space-y-2">
+                    <span class="text-[10px] font-bold text-zinc-400 uppercase tracking-wider block">📂 โปรเจกต์ที่กำลังทำอยู่</span>
+                    <div id="project-list" class="space-y-1 max-h-[220px] overflow-y-auto pr-1">
+                        <!-- Loaded dynamically -->
+                    </div>
+                </div>
+
+                <!-- Archived / Completed Projects Area (เก็บไว้อีกที่นึง) -->
+                <div class="pt-4 border-t border-zinc-100 space-y-2">
+                    <span class="text-[10px] font-bold text-zinc-400 uppercase tracking-wider block">🏆 คลังโปรเจกต์ที่เสร็จแล้ว</span>
+                    <div id="completed-project-list" class="space-y-1 max-h-[180px] overflow-y-auto pr-1">
+                        <!-- Loaded dynamically -->
+                    </div>
+                </div>
+            </div>
+
+            <!-- Footer Sidebar Info & Nav Link -->
+            <div class="pt-6 border-t border-zinc-100 space-y-3">
+                <!-- ปุ่มเปิดบอร์ดคัมบัง ( index.html เดิมของคุณ ) พ่วงไอดีโปรเจกต์ปัจจุบัน -->
+                <button onclick="goToBoard()" class="w-full inline-flex items-center justify-center rounded-xl border border-transparent bg-indigo-600 px-3 py-2 text-xs font-bold text-white hover:bg-indigo-700 transition-all cursor-pointer shadow-sm">
+                    <i data-lucide="layout-grid" class="w-4 h-4 mr-1.5"></i> 👉 ไปที่บอร์ดคัมบัง
+                </button>
+                <button onclick="exportToMarkdown()" class="w-full inline-flex items-center justify-center rounded-xl border border-zinc-200 bg-zinc-50 px-3 py-2 text-xs font-semibold text-zinc-700 hover:bg-zinc-100 hover:border-zinc-300 transition-all cursor-pointer">
+                    <i data-lucide="download-cloud" class="w-4 h-4 mr-1.5 text-indigo-500"></i> ส่งออกแผนงาน (.MD)
+                </button>
+                
+                <!-- Cloud Sync Status Indicator -->
+                <div id="sync-status" class="flex items-center justify-center text-[11px] text-zinc-400 mt-1 font-semibold transition-all">
+                    <!-- Loaded dynamically via JS status -->
+                </div>
+            </div>
+        </div>
+
+        <!-- MAIN CANVAS Workspace -->
+        <div class="lg:col-span-3 p-6 md:p-12 flex flex-col bg-slate-50/50">
+            
+            <!-- Empty State -->
+            <div id="empty-state" class="hidden flex-col items-center justify-center py-32 text-center">
+                <div class="w-16 h-16 rounded-2xl bg-white border border-zinc-100 flex items-center justify-center mb-4 shadow-sm">
+                    <i data-lucide="folder-open" class="w-8 h-8 text-zinc-300 animate-pulse"></i>
+                </div>
+                <h3 class="text-sm font-bold text-zinc-900">เริ่มตกตะกอนความคิดที่นี่</h3>
+                <p class="text-xs text-zinc-400 mt-1 mb-4 max-w-xs">ยังไม่มีโปรเจกต์ที่เปิดใช้งาน กดปุ่มสร้างด้านซ้ายเพื่อเปิดกล่องไอเดียของคุณ</p>
+                <button onclick="createNewProject()" class="inline-flex items-center justify-center rounded-xl bg-indigo-600 px-4 py-2 text-xs font-semibold text-white hover:bg-indigo-700 transition-colors">
+                    เปิดโปรเจกต์แรก
+                </button>
+            </div>
+
+            <!-- Main Workspace Editor -->
+            <div id="workspace-area" class="space-y-8 max-w-3xl w-full mx-auto hidden">
+                
+                <!-- Project Identity & Main Timeline Card -->
+                <div class="bg-white border border-zinc-200/60 rounded-2xl p-6 shadow-sm space-y-4 relative overflow-hidden">
+                    <div id="completion-ribbon" class="absolute top-0 right-0 bg-emerald-500 text-white text-[10px] font-bold px-3 py-1 rounded-bl-xl hidden flex items-center gap-1">
+                        <i data-lucide="award" class="w-3.5 h-3.5"></i> โปรเจกต์นี้เสร็จสมบูรณ์แล้ว
+                    </div>
+
+                    <div class="flex items-start gap-4">
+                        <!-- Emoji Picker -->
+                        <input type="text" id="proj-emoji" oninput="updateProjectHeader()" class="text-3xl w-14 h-14 border border-zinc-200 rounded-xl text-center bg-zinc-50 focus:border-indigo-600 focus:outline-none focus:ring-1 focus:ring-indigo-600 transition-all shadow-sm" placeholder="🧺">
+                        
+                        <!-- Name & Tagline -->
+                        <div class="flex-grow">
+                            <input type="text" id="proj-name" oninput="updateProjectHeader()" class="text-lg md:text-xl font-bold text-zinc-900 placeholder-zinc-300 focus:border-b-2 focus:border-indigo-600 focus:outline-none w-full bg-transparent pb-1 tracking-tight" placeholder="ใส่ชื่อไอเดียโปรเจกต์...">
+                            <textarea id="proj-desc" oninput="updateProjectHeader()" rows="2" class="w-full text-xs text-zinc-500 placeholder-zinc-400 focus:outline-none bg-transparent resize-none mt-2" placeholder="เขียนอธิบายรายละเอียดหรือภาพรวมของโปรเจกต์นี้แบบเข้าใจง่าย..."></textarea>
+                        </div>
+                    </div>
+
+                    <!-- Project Timeline Inputs -->
+                    <div class="grid grid-cols-2 sm:grid-cols-3 gap-4 pt-4 border-t border-zinc-100">
+                        <div>
+                            <label class="text-[10px] font-bold text-zinc-400 uppercase tracking-wider block mb-1">📅 วันเริ่มต้นโปรเจกต์</label>
+                            <input type="date" id="proj-start-date" onchange="updateProjectDates()" class="w-full text-xs border border-zinc-200 rounded-lg p-2 bg-zinc-50 focus:outline-none focus:ring-1 focus:ring-indigo-600 focus:border-indigo-600 transition-all">
+                        </div>
+                        <div>
+                            <label class="text-[10px] font-bold text-zinc-400 uppercase tracking-wider block mb-1">🏁 วันสิ้นสุดโปรเจกต์</label>
+                            <input type="date" id="proj-end-date" onchange="updateProjectDates()" class="w-full text-xs border border-zinc-200 rounded-lg p-2 bg-zinc-50 focus:outline-none focus:ring-1 focus:ring-indigo-600 focus:border-indigo-600 transition-all">
+                        </div>
+                        <div class="col-span-2 sm:col-span-1 flex flex-col justify-end">
+                            <div class="bg-indigo-50/50 border border-indigo-100/60 rounded-lg p-2 text-center h-10 flex flex-col justify-center">
+                                <span class="text-[9px] font-bold text-indigo-500 uppercase tracking-wider block">ระยะเวลารวมทั้งหมด</span>
+                                <span id="proj-duration-text" class="text-xs font-bold text-indigo-900">- วัน</span>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- Project Status Switcher -->
+                    <div class="pt-4 border-t border-zinc-100 flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
+                        <div class="flex items-center space-x-2">
+                            <span class="text-xs font-bold text-zinc-400 uppercase tracking-wider">สถานะโปรเจกต์โดยรวม:</span>
+                            <div class="flex rounded-lg border border-zinc-200 p-0.5 bg-zinc-50 text-xs font-semibold">
+                                <button onclick="setProjectStatus('active')" id="status-active-btn" class="px-3 py-1 rounded-md transition-all cursor-pointer">
+                                    📂 กำลังทำอยู่
+                                </button>
+                                <button onclick="setProjectStatus('completed')" id="status-completed-btn" class="px-3 py-1 rounded-md transition-all cursor-pointer">
+                                    🏆 เสร็จสิ้นแล้ว
+                                </button>
+                            </div>
+                        </div>
+                        <p class="text-[10px] text-zinc-400 italic">โปรเจกต์ที่เสร็จสิ้นแล้วจะถูกจัดเก็บแยกไว้ที่ด้านล่างซ้ายมือ</p>
+                    </div>
+                </div>
+
+                <!-- Timeline / Drag & Drop Boxes Section -->
+                <div class="space-y-4">
+                    <div class="flex items-center justify-between">
+                        <span class="text-[10px] font-bold text-zinc-400 uppercase tracking-wider block">กล่องกระบวนการทำงาน (ลำดับสเต็ปย่อยลากสลับเรียงเลขใหม่)</span>
+                    </div>
+
+                    <!-- Flow Container for Drag-and-Drop -->
+                    <div id="flow-container" class="space-y-4">
+                        <!-- Loaded via JS dynamically -->
+                    </div>
+
+                    <!-- Add Step Card Trigger -->
+                    <button onclick="addNewStep()" class="w-full inline-flex items-center justify-center rounded-2xl border-2 border-dashed border-zinc-200 bg-white hover:bg-indigo-50/20 hover:border-indigo-500 p-5 text-xs font-bold text-zinc-500 hover:text-indigo-600 transition-all cursor-pointer shadow-sm">
+                        <i data-lucide="plus" class="w-4 h-4 mr-1.5"></i> เพิ่มกล่องขั้นตอนใหม่ (BOX ถัดไป)
+                    </button>
+                </div>
+
+            </div>
+
+        </div>
+    </div>
+
+    <!-- Firebase SDK & App Scripts using ES Modules -->
+    <script type="module">
+        // เรียกใช้งาน Firestore components [1]
+        import { initializeApp } from "https://www.gstatic.com/firebasejs/10.8.0/firebase-app.js";
+        import { getAnalytics } from "https://www.gstatic.com/firebasejs/10.8.0/firebase-analytics.js";
+        import { getFirestore, doc, setDoc, getDoc, collection, query, where, getDocs, addDoc, updateDoc, deleteDoc, writeBatch } from "https://www.gstatic.com/firebasejs/10.8.0/firebase-firestore.js";
+
+        const firebaseConfig = {
+            apiKey: "AIzaSyCXSWM419rJYrzi-ICFj9HJxWLiPICbJHc",
+            authDomain: "l-boss.firebaseapp.com",
+            projectId: "l-boss",
+            storageBucket: "l-boss.firebasestorage.app",
+            messagingSenderId: "1038706773779",
+            appId: "1:1038706773779:web:454286f6d789fd6280d4e6",
+            measurementId: "G-R3MST7FWGY"
+        };
+
+        const app = initializeApp(firebaseConfig);
+        const analytics = getAnalytics(app);
+        const db = getFirestore(app);
+
+        const colorStyles = {
+            gray: { border: 'border-zinc-200 hover:border-zinc-400 bg-white', badge: 'bg-zinc-950 text-white', color: 'gray' },
+            emerald: { border: 'border-emerald-200 hover:border-emerald-400 bg-emerald-50/20', badge: 'bg-emerald-600 text-white', color: 'emerald' },
+            sky: { border: 'border-sky-200 hover:border-sky-400 bg-sky-50/20', badge: 'bg-sky-600 text-white', color: 'sky' },
+            purple: { border: 'border-purple-200 hover:border-purple-400 bg-purple-50/20', badge: 'bg-purple-600 text-white', color: 'purple' },
+            rose: { border: 'border-rose-200 hover:border-rose-400 bg-rose-50/20', badge: 'bg-rose-600 text-white', color: 'rose' },
+            amber: { border: 'border-amber-200 hover:border-amber-400 bg-amber-50/20', badge: 'bg-amber-600 text-white', color: 'amber' }
+        };
+
+        let projects = [];
+        let activeProjectId = '';
+
+        // Application Startup & Load Data
+        async function initApp() {
+            updateSyncStatusIndicator("loading");
+            
+            try {
+                // ดึงรายชื่อโปรเจกต์จากคอลเลกชัน projects โดยตรงเพื่อให้แมปชื่อกับหน้า index.html ได้ [1]
+                const q = collection(db, "projects");
+                const querySnapshot = await getDocs(q);
+                projects = [];
+                querySnapshot.forEach((doc) => {
+                    const data = doc.data();
+                    projects.push({
+                        id: doc.id,
+                        projectStatus: data.status || "active", // แมปสถานะ
+                        emoji: data.emoji || "🚀",
+                        name: data.name || "",
+                        description: data.description || "",
+                        startDate: data.startDate || "",
+                        endDate: data.endDate || "",
+                        steps: [] // โหลดข้อมูลกล่องย่อยแบบไดนามิก
+                    });
+                });
+                updateSyncStatusIndicator("cloud");
+            } catch (error) {
+                console.warn("Firestore fetch failed, local storage fallback:", error);
+                loadFromLocalStorage();
+                updateSyncStatusIndicator("local");
+            }
+
+            if (projects.length > 0) {
+                // ดึงโปรเจกต์แรกมาเปิด
+                const firstActive = projects.find(p => p.projectStatus === 'active');
+                if (firstActive) {
+                    await selectProject(firstActive.id);
+                } else {
+                    await selectProject(projects[0].id);
+                }
+            } else {
+                renderAll();
+            }
+        }
+
+        function loadFromLocalStorage() {
+            const saved = localStorage.getItem('creative_sandbox_projects');
+            if (saved) {
+                projects = JSON.parse(saved);
+            }
+        }
+
+        // Duration calculator
+        function calculateDuration(startStr, endStr) {
+            if (!startStr || !endStr) return 0;
+            const start = new Date(startStr);
+            const end = new Date(endStr);
+            if (isNaN(start) || isNaN(end) || end < start) return 0;
+            return Math.ceil((end - start) / (1000 * 60 * 60 * 24)) + 1;
+        }
+
+        // Check overdue
+        function getOverdueDays(step) {
+            if (step.status === 'done' || !step.endDate) return 0;
+            const today = new Date();
+            today.setHours(0,0,0,0);
+            const targetDate = new Date(step.endDate);
+            targetDate.setHours(0,0,0,0);
+
+            if (today > targetDate) {
+                const diffTime = today - targetDate;
+                return Math.ceil(diffTime / (1000 * 60 * 60 * 24));
+            }
+            return 0;
+        }
+
+        function isStepDateInvalid(step, proj) {
+            if (!step.startDate || !step.endDate || !proj.startDate || !proj.endDate) return false;
+            return step.startDate < proj.startDate || step.endDate > proj.endDate;
+        }
+
+        // Render Sidebar
+        function renderAll() {
+            renderSidebar();
+            updateWorkspaceVisibility();
+            
+            if (activeProjectId && projects.length > 0) {
+                const activeProj = projects.find(p => p.id === activeProjectId);
+                if (activeProj) {
+                    document.getElementById('proj-emoji').value = activeProj.emoji || '';
+                    document.getElementById('proj-name').value = activeProj.name || '';
+                    document.getElementById('proj-desc').value = activeProj.description || '';
+                    
+                    document.getElementById('proj-start-date').value = activeProj.startDate || '';
+                    document.getElementById('proj-end-date').value = activeProj.endDate || '';
+                    
+                    const duration = calculateDuration(activeProj.startDate, activeProj.endDate);
+                    document.getElementById('proj-duration-text').innerText = duration > 0 ? `${duration} วัน` : '- วัน';
+
+                    updateProjectStatusUI(activeProj.projectStatus);
+                    renderSteps();
+                }
+            }
+            lucide.createIcons();
+        }
+
+        function updateWorkspaceVisibility() {
+            const workspace = document.getElementById('workspace-area');
+            const emptyState = document.getElementById('empty-state');
+            
+            if (activeProjectId && projects.length > 0) {
+                workspace.classList.remove('hidden');
+                emptyState.classList.add('hidden');
+            } else {
+                workspace.classList.add('hidden');
+                emptyState.classList.remove('hidden');
+            }
+        }
+
+        function renderSidebar() {
+            const activeContainer = document.getElementById('project-list');
+            const completedContainer = document.getElementById('completed-project-list');
+            
+            activeContainer.innerHTML = '';
+            completedContainer.innerHTML = '';
+
+            const activeProjects = projects.filter(p => p.projectStatus === 'active');
+            const completedProjects = projects.filter(p => p.projectStatus === 'completed');
+
+            if (activeProjects.length > 0) {
+                activeProjects.forEach(p => {
+                    const isActive = p.id === activeProjectId;
+                    const activeClass = isActive 
+                        ? 'bg-indigo-50/70 border-indigo-200 text-indigo-900 font-semibold shadow-sm' 
+                        : 'text-zinc-600 hover:bg-zinc-50 border-transparent';
+                    
+                    activeContainer.innerHTML += `
+                        <div class="group flex items-center justify-between px-3 py-2 rounded-xl border text-xs transition-all cursor-pointer ${activeClass}" onclick="selectProject('${p.id}')">
+                            <span class="truncate flex items-center">
+                                <span class="mr-2 text-sm">${p.emoji || '🚀'}</span>
+                                <span class="truncate">${p.name || 'ไม่มีชื่อโปรเจกต์'}</span>
+                            </span>
+                            <button onclick="event.stopPropagation(); deleteProject('${p.id}')" class="opacity-0 group-hover:opacity-100 text-zinc-400 hover:text-red-600 transition-opacity p-0.5 rounded hover:bg-zinc-200/50 cursor-pointer">
+                                <i data-lucide="trash-2" class="w-3.5 h-3.5"></i>
+                            </button>
+                        </div>
+                    `;
+                });
+            } else {
+                activeContainer.innerHTML = `<span class="text-[11px] text-zinc-400 italic block py-2 text-center">ไม่มีโปรเจกต์ค้างอยู่</span>`;
+            }
+
+            if (completedProjects.length > 0) {
+                completedProjects.forEach(p => {
+                    const isActive = p.id === activeProjectId;
+                    const activeClass = isActive 
+                        ? 'bg-emerald-50/70 border-emerald-200 text-emerald-900 font-semibold shadow-sm' 
+                        : 'text-zinc-500 hover:bg-zinc-50 border-transparent';
+                    
+                    completedContainer.innerHTML += `
+                        <div class="group flex items-center justify-between px-3 py-2 rounded-xl border text-xs transition-all cursor-pointer ${activeClass}" onclick="selectProject('${p.id}')">
+                            <span class="truncate flex items-center">
+                                <span class="mr-2 text-sm">${p.emoji || '🏆'}</span>
+                                <span class="truncate line-through decoration-zinc-300">${p.name || 'ไม่มีชื่อโปรเจกต์'}</span>
+                            </span>
+                            <button onclick="event.stopPropagation(); deleteProject('${p.id}')" class="opacity-0 group-hover:opacity-100 text-zinc-400 hover:text-red-600 transition-opacity p-0.5 rounded hover:bg-zinc-200/50 cursor-pointer">
+                                <i data-lucide="trash-2" class="w-3.5 h-3.5"></i>
+                            </button>
+                        </div>
+                    `;
+                });
+            } else {
+                completedContainer.innerHTML = `<span class="text-[11px] text-zinc-300 italic block py-2 text-center">ยังไม่มีความสำเร็จใหม่</span>`;
+            }
+        }
+
+        // อัปเดตและซิงก์สเตตัสโปรเจกต์เข้า Firestore
+        async function setProjectStatus(status) {
+            const activeProj = projects.find(p => p.id === activeProjectId);
+            if (activeProj) {
+                activeProj.projectStatus = status;
+                
+                try {
+                    updateSyncStatusIndicator("saving");
+                    const docRef = doc(db, "projects", activeProjectId);
+                    await updateDoc(docRef, { status: status });
+                    
+                    updateSyncStatusIndicator("cloud");
+                    showToast('เปลี่ยนสถานะและซิงก์โปรเจกต์แล้ว');
+                    
+                    if (status === 'completed') {
+                        const remainingActive = projects.find(p => p.projectStatus === 'active');
+                        if (remainingActive) {
+                            activeProjectId = remainingActive.id;
+                        }
+                    }
+                    await selectProject(activeProjectId);
+                } catch(e) {
+                    console.error("Status Sync Error: ", e);
+                    updateSyncStatusIndicator("local_error");
+                }
+            }
+        }
+
+        function updateProjectStatusUI(status) {
+            const activeBtn = document.getElementById('status-active-btn');
+            const completedBtn = document.getElementById('status-completed-btn');
+            const ribbon = document.getElementById('completion-ribbon');
+
+            if (status === 'completed') {
+                activeBtn.className = "px-3 py-1 rounded-md text-zinc-400 hover:text-zinc-700 cursor-pointer";
+                completedBtn.className = "px-3 py-1 rounded-md bg-emerald-500 text-white font-bold cursor-pointer shadow-sm";
+                ribbon.classList.remove('hidden');
+            } else {
+                activeBtn.className = "px-3 py-1 rounded-md bg-indigo-600 text-white font-bold cursor-pointer shadow-sm";
+                completedBtn.className = "px-3 py-1 rounded-md text-zinc-400 hover:text-zinc-700 cursor-pointer";
+                ribbon.classList.add('hidden');
+            }
+        }
+
+        // สร้างโปรเจกต์ใหม่และซิงก์คลาวด์ [1]
+        async function createNewProject() {
+            const newProjData = {
+                status: "active",
+                emoji: "💡",
+                name: "โปรเจกต์ใหม่ยามระดมสมอง",
+                description: "อธิบายรายละเอียดโปรเจกต์หลักที่นี่...",
+                startDate: "",
+                endDate: ""
+            };
+
+            try {
+                updateSyncStatusIndicator("saving");
+                const docRef = await addDoc(collection(db, "projects"), newProjData);
+                
+                const newProj = {
+                    id: docRef.id,
+                    projectStatus: newProjData.status,
+                    emoji: newProjData.emoji,
+                    name: newProjData.name,
+                    description: newProjData.description,
+                    startDate: newProjData.startDate,
+                    endDate: newProjData.endDate,
+                    steps: []
+                };
+                
+                projects.push(newProj);
+                activeProjectId = newProj.id;
+                
+                updateSyncStatusIndicator("cloud");
+                showToast("✓ สร้างโปรเจกต์สำเร็จและซิงก์ขึ้น Cloud!");
+                await selectProject(activeProjectId);
+            } catch (err) {
+                console.error("Error creating project:", err);
+                updateSyncStatusIndicator("local_error");
+            }
+        }
+
+        async function deleteProject(id) {
+            if (confirm('คุณแน่ใจหรือไม่ว่าจะลบกระบวนการคิดของโปรเจกต์นี้? ข้อมูลและขั้นตอนการ์ดใน ToDo List บอร์ดจะสูญหาย')) {
+                try {
+                    updateSyncStatusIndicator("saving");
+                    
+                    // ลบเอกสารโปรเจกต์
+                    await deleteDoc(doc(db, "projects", id));
+                    
+                    // ลบงาน (tasks) ทั้งหมดที่ผูกกับโปรเจกต์นี้
+                    const q = query(collection(db, "tasks"), where("projectId", "==", id));
+                    const querySnapshot = await getDocs(q);
+                    const batch = writeBatch(db);
+                    querySnapshot.forEach((doc) => {
+                        batch.delete(doc.ref);
+                    });
+                    await batch.commit();
+
+                    projects = projects.filter(p => p.id !== id);
+                    if (activeProjectId === id) {
+                        const nextActive = projects.find(p => p.projectStatus === 'active');
+                        if (nextActive) {
+                            activeProjectId = nextActive.id;
+                        } else {
+                            activeProjectId = projects.length > 0 ? projects[0].id : '';
+                        }
+                    }
+                    
+                    updateSyncStatusIndicator("cloud");
+                    showToast('ลบโปรเจกต์และล้างบอร์ดงานย่อยสำเร็จ');
+                    await selectProject(activeProjectId);
+                } catch(e) {
+                    console.error("Delete Project Error: ", e);
+                    updateSyncStatusIndicator("local_error");
+                }
+            }
+        }
+
+        // ดึงข้อมูลขั้นตอนย่อย (Box) สดๆ จาก Collection 'tasks' คลาวด์ เพื่อให้ซิงก์แบบเรียลไทม์ 2 ทิศทาง [1]
+        async function selectProject(id) {
+            activeProjectId = id;
+            if(!activeProjectId) {
+                renderAll();
+                return;
+            }
+
+            updateSyncStatusIndicator("loading");
+            const activeProj = projects.find(p => p.id === id);
+            
+            if (activeProj) {
+                try {
+                    // ดึงงานที่มี flag 'isSandboxStep' เพื่อคัดกรองว่าเป็นกล่องขั้นตอน [1]
+                    const q = query(
+                        collection(db, "tasks"),
+                        where("projectId", "==", id),
+                        where("isSandboxStep", "==", true)
+                    );
+                    const querySnapshot = await getDocs(q);
+                    let steps = [];
+                    
+                    querySnapshot.forEach((doc) => {
+                        const data = doc.data();
+                        
+                        // ปรับสลับสถานะจาก ToDo คัมบัง บอร์ด กลับมาเป็น Sandbox
+                        let sandboxStatus = "todo";
+                        if (data.status === "inprogress") sandboxStatus = "doing";
+                        else if (data.status === "done") sandboxStatus = "done";
+
+                        steps.push({
+                            id: doc.id,
+                            title: data.title || "",
+                            details: data.desc || "", // แมปจาก desc บอร์ดเดิม
+                            status: sandboxStatus,
+                            result: data.followUpResult || "", // แมปจากผลลัพธ์
+                            color: data.color || "gray",
+                            startDate: data.startDate || "",
+                            endDate: data.endDate || data.date || "", // แมป date ปฏิทิน
+                            stepOrder: data.stepOrder || 0
+                        });
+                    });
+
+                    // เรียงตามลำดับความสำคัญของขั้นตอน Sandbox
+                    steps.sort((a, b) => a.stepOrder - b.stepOrder);
+                    activeProj.steps = steps;
+                    
+                    updateSyncStatusIndicator("cloud");
+                } catch(e) {
+                    console.error("Firestore loading tasks failed: ", e);
+                    updateSyncStatusIndicator("local_error");
+                }
+            }
+            renderAll();
+        }
+
+        async function updateProjectHeader() {
+            const activeProj = projects.find(p => p.id === activeProjectId);
+            if (activeProj) {
+                activeProj.emoji = document.getElementById('proj-emoji').value;
+                activeProj.name = document.getElementById('proj-name').value;
+                activeProj.description = document.getElementById('proj-desc').value;
+                
+                try {
+                    const docRef = doc(db, "projects", activeProjectId);
+                    await updateDoc(docRef, {
+                        emoji: activeProj.emoji,
+                        name: activeProj.name,
+                        description: activeProj.description
+                    });
+                    triggerQuietSaveToast();
+                    renderSidebar();
+                } catch(e) {
+                    console.error("Meta Sync Error: ", e);
+                }
+            }
+        }
+
+        async function updateProjectDates() {
+            const activeProj = projects.find(p => p.id === activeProjectId);
+            if (activeProj) {
+                activeProj.startDate = document.getElementById('proj-start-date').value;
+                activeProj.endDate = document.getElementById('proj-end-date').value;
+                
+                const duration = calculateDuration(activeProj.startDate, activeProj.endDate);
+                document.getElementById('proj-duration-text').innerText = duration > 0 ? `${duration} วัน` : '- วัน';
+                
+                try {
+                    updateSyncStatusIndicator("saving");
+                    const docRef = doc(db, "projects", activeProjectId);
+                    await updateDoc(docRef, {
+                        startDate: activeProj.startDate,
+                        endDate: activeProj.endDate
+                    });
+                    updateSyncStatusIndicator("cloud");
+                    showToast('ปรับปรุงเวลาแผนงานหลักและล็อกกรอบปฏิทินแล้ว');
+                    renderSteps();
+                } catch(e) {
+                    console.error("Dates Sync Error: ", e);
+                    updateSyncStatusIndicator("local_error");
+                }
+            }
+        }
+
+        // จัดการซิงก์กล่องขั้นตอนย่อยไปยัง Tasks บนคลาวด์ [1, 2]
+        async function updateStepTitle(index, val) {
+            const activeProj = projects.find(p => p.id === activeProjectId);
+            if (activeProj && activeProj.steps[index]) {
+                const step = activeProj.steps[index];
+                step.title = val;
+                
+                try {
+                    const taskRef = doc(db, "tasks", step.id);
+                    await updateDoc(taskRef, { title: val });
+                    triggerQuietSaveToast();
+                } catch(e) {
+                    console.error("Title sync failed: ", e);
+                }
+            }
+        }
+
+        async function updateStepDetails(index, val) {
+            const activeProj = projects.find(p => p.id === activeProjectId);
+            if (activeProj && activeProj.steps[index]) {
+                const step = activeProj.steps[index];
+                step.details = val;
+                
+                try {
+                    const taskRef = doc(db, "tasks", step.id);
+                    await updateDoc(taskRef, { desc: val }); // บันทึกลง desc ของการ์ดเดิม
+                    triggerQuietSaveToast();
+                } catch(e) {
+                    console.error("Desc sync failed: ", e);
+                }
+            }
+        }
+
+        async function updateStepResult(index, val) {
+            const activeProj = projects.find(p => p.id === activeProjectId);
+            if (activeProj && activeProj.steps[index]) {
+                const step = activeProj.steps[index];
+                step.result = val;
+                
+                try {
+                    const taskRef = doc(db, "tasks", step.id);
+                    await updateDoc(taskRef, { 
+                        followUpResult: val,
+                        requireFollowUp: true // ดึงขึ้น Outcomes Auto
+                    });
+                    triggerQuietSaveToast();
+                } catch(e) {
+                    console.error("Outcome sync failed: ", e);
+                }
+            }
+        }
+
+        async function updateStepStartDate(index, val) {
+            const activeProj = projects.find(p => p.id === activeProjectId);
+            if (activeProj && activeProj.steps[index]) {
+                const step = activeProj.steps[index];
+                step.startDate = val;
+                
+                try {
+                    const taskRef = doc(db, "tasks", step.id);
+                    await updateDoc(taskRef, { startDate: val });
+                    triggerQuietSaveToast();
+                    renderSteps();
+                } catch(e) {
+                    console.error("Start date sync failed: ", e);
+                }
+            }
+        }
+
+        // วันสิ้นสุดใน Sandbox จะซิงก์กับฟิลด์ 'date' ของ ToDoList เพื่อรันปฏิทินและ Overdue ร่วมกัน [2]
+        async function updateStepEndDate(index, val) {
+            const activeProj = projects.find(p => p.id === activeProjectId);
+            if (activeProj && activeProj.steps[index]) {
+                const step = activeProj.steps[index];
+                step.endDate = val;
+                
+                try {
+                    const taskRef = doc(db, "tasks", step.id);
+                    await updateDoc(taskRef, { 
+                        endDate: val,
+                        date: val // ลิงก์ช่องวันที่ ToDo List
+                    });
+                    triggerQuietSaveToast();
+                    renderSteps();
+                } catch(e) {
+                    console.error("End date sync failed: ", e);
+                }
+            }
+        }
+
+        async function setStepColor(index, color) {
+            const activeProj = projects.find(p => p.id === activeProjectId);
+            if (activeProj && activeProj.steps[index]) {
+                const step = activeProj.steps[index];
+                step.color = color;
+                
+                try {
+                    const taskRef = doc(db, "tasks", step.id);
+                    await updateDoc(taskRef, { color: color });
+                    triggerQuietSaveToast();
+                    renderSteps();
+                } catch(e) {
+                    console.error("Color sync failed: ", e);
+                }
+            }
+        }
+
+        // ปรับเปลี่ยนสถานะ Box จะแมปสเตตัสบอร์ดคัมบังของคุณให้ตรงกัน [2]
+        async function setStepStatus(index, status) {
+            const activeProj = projects.find(p => p.id === activeProjectId);
+            if (activeProj && activeProj.steps[index]) {
+                const step = activeProj.steps[index];
+                step.status = status;
+                
+                let boardStatus = "todo";
+                if(status === "doing") boardStatus = "inprogress";
+                else if(status === "done") boardStatus = "done";
+
+                const isCompleted = (status === "done");
+
+                try {
+                    updateSyncStatusIndicator("saving");
+                    const taskRef = doc(db, "tasks", step.id);
+                    await updateDoc(taskRef, { 
+                        status: boardStatus,
+                        requireFollowUp: isCompleted
+                    });
+                    
+                    updateSyncStatusIndicator("cloud");
+                    showToast('ซิงก์สถานะงานเข้า ToDo List บอร์ดสำเร็จ!');
+                    renderSteps();
+                } catch(e) {
+                    console.error("Status Sync Error: ", e);
+                    updateSyncStatusIndicator("local_error");
+                }
+            }
+        }
+
+        // การเพิ่มขั้นตอนใน Sandbox คือการเขียน Task ใหม่ลงฐานข้อมูล ToDo [1]
+        async function addNewStep() {
+            const activeProj = projects.find(p => p.id === activeProjectId);
+            if (!activeProj) return;
+
+            const nextOrder = (activeProj.steps ? activeProj.steps.length : 0) + 1;
+            
+            const newTaskData = {
+                projectId: activeProjectId,
+                isSandboxStep: true, // กำหนด flag แยกประเภทการ์ด Sandbox
+                stepOrder: nextOrder,
+                title: "ระบุข้อหัวขั้นตอนปฏิบัติงานย่อย",
+                desc: "", // บันทึก details
+                status: "todo",
+                priority: "",
+                startDate: activeProj.startDate || "",
+                endDate: activeProj.endDate || "",
+                date: activeProj.endDate || "", // ตั้งกำหนดส่งคัมบัง
+                requireFollowUp: false,
+                followUpResult: "",
+                color: "gray"
+            };
+
+            try {
+                updateSyncStatusIndicator("saving");
+                const docRef = await addDoc(collection(db, "tasks"), newTaskData);
+                
+                updateSyncStatusIndicator("cloud");
+                showToast("✓ สร้างขั้นตอนและสร้างงานในบอร์ด ToDo List เรียบร้อย!");
+                await selectProject(activeProjectId);
+            } catch(e) {
+                console.error("Error creating Task Step: ", e);
+                updateSyncStatusIndicator("local_error");
+            }
+        }
+
+        async function deleteStep(index) {
+            const activeProj = projects.find(p => p.id === activeProjectId);
+            if (activeProj && activeProj.steps[index]) {
+                const step = activeProj.steps[index];
+                if (confirm('ลบขั้นตอนงานนี้ใช่หรือไม่? (การ์ดงานใน ToDo List บอร์ดจะถูกลบไปด้วย)')) {
+                    try {
+                        updateSyncStatusIndicator("saving");
+                        await deleteDoc(doc(db, "tasks", step.id));
+                        
+                        updateSyncStatusIndicator("cloud");
+                        showToast("✖ ลบสเต็ปงานและล้างบอร์ดสำเร็จ");
+                        await selectProject(activeProjectId);
+                    } catch(e) {
+                        console.error("Delete Task Step Error: ", e);
+                        updateSyncStatusIndicator("local_error");
+                    }
+                }
+            }
+        }
+
+        // ลากสลับตำแหน่งเพื่อเรียงลำดับด่วนแบบ Batch Write ซิงก์คลาวด์ทีเดียว [1]
+        async function drop(e, index) {
+            e.preventDefault();
+            const activeProj = projects.find(p => p.id === activeProjectId);
+            if (activeProj && activeProj.steps) {
+                const draggedItem = activeProj.steps[dragStartIndex];
+                activeProj.steps.splice(dragStartIndex, 1);
+                activeProj.steps.splice(index, 0, draggedItem);
+                
+                try {
+                    updateSyncStatusIndicator("saving");
+                    const batch = writeBatch(db);
+                    
+                    activeProj.steps.forEach((step, idx) => {
+                        step.stepOrder = idx + 1;
+                        const taskRef = doc(db, "tasks", step.id);
+                        batch.update(taskRef, { stepOrder: step.stepOrder });
+                    });
+                    
+                    await batch.commit();
+                    updateSyncStatusIndicator("cloud");
+                    showToast("✓ สลับปรับเรียงเลขลำดับใน ToDoList สำเร็จ!");
+                    renderSteps();
+                } catch(e) {
+                    console.error("Batch Order Reorder Failed: ", e);
+                    updateSyncStatusIndicator("local_error");
+                }
+            }
+        }
+
+        // นำทางไปยัง ToDoList คัมบังบอร์ดหลักพ่วงไอดีของโปรเจกต์
+        function goToBoard() {
+            if (activeProjectId) {
+                window.location.href = `index.html?projectId=${activeProjectId}`;
+            }
+        }
+
+        // Render steps list
+        function renderSteps() {
+            const container = document.getElementById('flow-container');
+            container.innerHTML = '';
+            
+            const activeProj = projects.find(p => p.id === activeProjectId);
+            if (!activeProj || !activeProj.steps || activeProj.steps.length === 0) {
+                container.innerHTML = `
+                    <div class="text-center py-8 text-xs text-zinc-400 italic bg-white border border-zinc-200/60 rounded-2xl shadow-sm">
+                        ยังไม่มีกล่องขั้นตอนปฏิบัติงาน, กดปุ่มด้านล่างเพื่อเพิ่มขั้นตอนแรกของคุณ
+                    </div>
+                `;
+                return;
+            }
+
+            activeProj.steps.forEach((step, index) => {
+                const stepNum = String(index + 1).padStart(2, '0');
+                
+                const stepDays = calculateDuration(step.startDate, step.endDate);
+                const overdueDays = getOverdueDays(step);
+                const isOverdue = overdueDays > 0;
+                const isOutOfBound = isStepDateInvalid(step, activeProj);
+                
+                let theme = colorStyles[step.color || 'gray'];
+                let overdueStyles = '';
+
+                if (isOverdue) {
+                    overdueStyles = 'border-rose-400 bg-rose-50/10 shadow-[0_0_10px_rgba(244,63,94,0.05)]';
+                } else if (isOutOfBound) {
+                    overdueStyles = 'border-amber-300 bg-amber-50/10';
+                }
+
+                const isTodo = step.status === 'todo';
+                const isDoing = step.status === 'doing';
+                const isDone = step.status === 'done';
+
+                container.innerHTML += `
+                    <!-- Draggable Card Wrapper -->
+                    <div class="draggable-card relative flex items-start gap-3" 
+                         draggable="true" 
+                         ondragstart="dragStart(event, ${index})" 
+                         ondragover="dragOver(event)" 
+                         ondrop="drop(event, ${index})"
+                         ondragend="dragEnd(event)">
+                        
+                        <!-- Drag Handle & Fixed Sequential Step Number (01, 02...) -->
+                        <div class="flex flex-col items-center justify-start space-y-2 mt-4 cursor-grab active:cursor-grabbing hover:bg-zinc-200/50 p-1 rounded-md transition-colors" title="ลากเพื่อย้ายขั้นตอน">
+                            <i data-lucide="grip-vertical" class="w-4 h-4 text-zinc-400"></i>
+                            <div class="w-6 h-6 rounded-full ${theme.badge} flex items-center justify-center text-[10px] font-bold shadow-sm">
+                                ${stepNum}
+                            </div>
+                        </div>
+
+                        <!-- Card Body (Adaptive border styling based on deadlines) -->
+                        <div class="flex-grow bg-white border ${overdueStyles ? overdueStyles : theme.border} rounded-2xl p-5 shadow-sm transition-all relative">
+                            
+                            <!-- Overdue Warning Badge -->
+                            ${isOverdue ? `
+                            <div class="absolute -top-2 right-4 bg-rose-500 text-white text-[9px] font-bold px-2.5 py-0.5 rounded-full shadow-md animate-pulse flex items-center gap-1">
+                                <i data-lucide="alert-triangle" class="w-3 h-3"></i> เกินกำหนดส่ง! (เลยกำหนด ${overdueDays} วัน)
+                            </div>
+                            ` : ''}
+
+                            <!-- Out of Scope Warning Badge -->
+                            ${isOutOfBound ? `
+                            <div class="absolute -top-2 right-4 bg-amber-500 text-white text-[9px] font-bold px-2.5 py-0.5 rounded-full shadow-md flex items-center gap-1">
+                                <i data-lucide="alert-circle" class="w-3 h-3"></i> วันที่อยู่นอกระยะเวลาของโปรเจกต์หลัก!
+                            </div>
+                            ` : ''}
+                            
+                            <!-- Header Action Block -->
+                            <div class="flex flex-col sm:flex-row sm:items-center justify-between gap-3 mb-3 pb-3 border-b border-zinc-100">
+                                <input type="text" value="${step.title || ''}" oninput="updateStepTitle(${index}, this.value)" class="font-bold text-sm text-zinc-900 placeholder-zinc-300 focus:outline-none focus:border-b-2 focus:border-indigo-600 w-full bg-transparent" placeholder="ระบุชื่อขั้นตอนที่ ${index+1}...">
+                                
+                                <div class="flex flex-wrap items-center gap-2">
+                                    <!-- Color panel -->
+                                    <div class="flex items-center space-x-1 border border-zinc-200/60 rounded-lg p-1 bg-white shadow-sm">
+                                        <button onclick="setStepColor(${index}, 'gray')" class="w-3 h-3 rounded-full bg-zinc-300 ring-offset-1 ${step.color === 'gray' ? 'ring-2 ring-zinc-400' : ''}" title="สีเทา"></button>
+                                        <button onclick="setStepColor(${index}, 'emerald')" class="w-3 h-3 rounded-full bg-emerald-400 ring-offset-1 ${step.color === 'emerald' ? 'ring-2 ring-emerald-500' : ''}" title="สีมรกต"></button>
+                                        <button onclick="setStepColor(${index}, 'sky')" class="w-3 h-3 rounded-full bg-sky-400 ring-offset-1 ${step.color === 'sky' ? 'ring-2 ring-sky-500' : ''}" title="สีท้องฟ้า"></button>
+                                        <button onclick="setStepColor(${index}, 'purple')" class="w-3 h-3 rounded-full bg-purple-400 ring-offset-1 ${step.color === 'purple' ? 'ring-2 ring-purple-500' : ''}" title="สีม่วง"></button>
+                                        <button onclick="setStepColor(${index}, 'rose')" class="w-3 h-3 rounded-full bg-rose-400 ring-offset-1 ${step.color === 'rose' ? 'ring-2 ring-rose-500' : ''}" title="สีชมพู"></button>
+                                        <button onclick="setStepColor(${index}, 'amber')" class="w-3 h-3 rounded-full bg-amber-400 ring-offset-1 ${step.color === 'amber' ? 'ring-2 ring-amber-500' : ''}" title="สีส้มทอง"></button>
+                                    </div>
+
+                                    <!-- Status buttons -->
+                                    <div class="flex rounded-lg border border-zinc-200 p-0.5 bg-white text-[10px] font-semibold shadow-sm">
+                                        <button onclick="setStepStatus(${index}, 'todo')" class="px-2 py-1 rounded-md transition-all ${isTodo ? 'bg-zinc-100 text-zinc-900 font-bold' : 'text-zinc-400 hover:text-zinc-600'}">ยังไม่ทำ</button>
+                                        <button onclick="setStepStatus(${index}, 'doing')" class="px-2 py-1 rounded-md transition-all ${isDoing ? 'bg-amber-100 text-amber-800 font-bold' : 'text-zinc-400 hover:text-zinc-600'}">กำลังทำ</button>
+                                        <button onclick="setStepStatus(${index}, 'done')" class="px-2 py-1 rounded-md transition-all ${isDone ? 'bg-emerald-100 text-emerald-800 font-bold' : 'text-zinc-400 hover:text-zinc-600'}">เสร็จแล้ว</button>
+                                    </div>
+
+                                    <!-- Delete button -->
+                                    <button onclick="deleteStep(${index})" class="p-1 rounded text-zinc-300 hover:text-red-500 hover:bg-red-50 transition-colors cursor-pointer">
+                                        <i data-lucide="trash-2" class="w-4 h-4"></i>
+                                    </button>
+                                </div>
+                            </div>
+
+                            <!-- Step Details content text -->
+                            <textarea oninput="updateStepDetails(${index}, this.value)" rows="2" class="w-full text-xs text-zinc-600 placeholder-zinc-400 focus:outline-none bg-transparent resize-none" placeholder="เขียนบันทึกรายละเอียดที่คุณจำเป็นต้องประเมินและลงมือทำในขั้นตอนนี้...">${step.details || ''}</textarea>
+                            
+                            <!-- Box Timeline constraints (locked with project dates) -->
+                            <div class="mt-3 pt-3 border-t border-zinc-100 grid grid-cols-1 sm:grid-cols-3 gap-3">
+                                <div>
+                                    <label class="text-[9px] font-bold text-zinc-400 uppercase tracking-wider block mb-0.5">เริ่มงาน</label>
+                                    <input type="date" value="${step.startDate || ''}" 
+                                           min="${activeProj.startDate || ''}" 
+                                           max="${activeProj.endDate || ''}" 
+                                           onchange="updateStepStartDate(${index}, this.value)" 
+                                           class="w-full text-[11px] border border-zinc-200/80 rounded-lg p-1.5 bg-zinc-50/50 focus:outline-none focus:ring-1 focus:ring-indigo-600">
+                                </div>
+                                <div>
+                                    <label class="text-[9px] font-bold text-zinc-400 uppercase tracking-wider block mb-0.5">สิ้นสุดงาน</label>
+                                    <input type="date" value="${step.endDate || ''}" 
+                                           min="${activeProj.startDate || ''}" 
+                                           max="${activeProj.endDate || ''}" 
+                                           onchange="updateStepEndDate(${index}, this.value)" 
+                                           class="w-full text-[11px] border border-zinc-200/80 rounded-lg p-1.5 bg-zinc-50/50 focus:outline-none focus:ring-1 focus:ring-indigo-600">
+                                </div>
+                                <div class="flex items-end">
+                                    <div class="w-full text-center py-1.5 bg-zinc-50 border border-zinc-200 rounded-lg text-[10px] text-zinc-500 font-bold flex flex-col justify-center">
+                                        <span class="text-[8px] font-bold text-zinc-400 uppercase tracking-wider">ระยะเวลาทำส่วนนี้</span>
+                                        <span class="text-indigo-900">${stepDays > 0 ? `${stepDays} วัน` : 'รอระบุวัน'}</span>
+                                    </div>
+                                </div>
+                            </div>
+
+                            <!-- Done Outcome (Triggered when marked as completed) -->
+                            ${isDone ? `
+                            <div class="mt-3 pt-3 border-t border-dashed border-zinc-200">
+                                <label class="text-[10px] font-bold text-zinc-500 block mb-1">🎯 ผลลัพธ์และสิ่งที่ถอดบทเรียน (ซิงก์ ToDo List บอร์ดอัตโนมัติ):</label>
+                                <textarea oninput="updateStepResult(${index}, this.value)" rows="2" class="w-full text-xs text-zinc-700 placeholder-zinc-400 border border-zinc-200 rounded-xl p-2.5 bg-white/60 focus:outline-none focus:ring-1 focus:ring-indigo-600 focus:border-indigo-600 transition-all resize-none font-medium" placeholder="บันทึกผลสัมฤทธิ์หลังดำเนินงานเสร็จสิ้นในส่วนนี้...">${step.result || ''}</textarea>
+                            </div>
+                            ` : ''}
+
+                        </div>
+                    </div>
+                `;
+            });
+            lucide.createIcons();
+        }
+
+        // Display Cloud Sync status text in the footer sidebar
+        function updateSyncStatusIndicator(status) {
+            const container = document.getElementById('sync-status');
+            
+            if (status === "loading") {
+                container.innerHTML = `
+                    <span class="flex items-center text-zinc-400">
+                        <i data-lucide="loader" class="w-3.5 h-3.5 mr-1.5 animate-spin"></i> กำลังดาวน์โหลดโครงสร้าง Cloud...
+                    </span>`;
+            } else if (status === "saving") {
+                container.innerHTML = `
+                    <span class="flex items-center text-indigo-500">
+                        <i data-lucide="cloud-lightning" class="w-3.5 h-3.5 mr-1.5 animate-pulse"></i> กำลังซิงก์คลาวด์...
+                    </span>`;
+            } else if (status === "cloud") {
+                container.innerHTML = `
+                    <span class="flex items-center text-emerald-500">
+                        <i data-lucide="cloud" class="w-3.5 h-3.5 mr-1.5"></i> ซิงก์กับบอร์ดเรียลไทม์แล้ว
+                    </span>`;
+            } else if (status === "local") {
+                container.innerHTML = `
+                    <span class="flex items-center text-zinc-400">
+                        <i data-lucide="hard-drive" class="w-3.5 h-3.5 mr-1.5"></i> โหมดออฟไลน์
+                    </span>`;
+            } else if (status === "local_error") {
+                container.innerHTML = `
+                    <span class="flex items-center text-amber-500" title="มีปัญหาในการเชื่อมต่อคลาวด์ ตรวจสอบสิทธิ์ฐานข้อมูลของคุณ">
+                        <i data-lucide="alert-circle" class="w-3.5 h-3.5 mr-1.5"></i> ขัดข้อง (ตรวจสอบ Firebase)
+                    </span>`;
+            }
+            lucide.createIcons();
+        }
+
+        let toastTimeout;
+        function showToast(text = 'บันทึกความคืบหน้าแล้ว') {
+            const toast = document.getElementById('toast');
+            document.getElementById('toast-text').innerText = text;
+            
+            toast.classList.remove('opacity-0', 'translate-y-2');
+            toast.classList.add('opacity-100', 'translate-y-0');
+            
+            clearTimeout(toastTimeout);
+            toastTimeout = setTimeout(() => {
+                toast.classList.remove('opacity-100', 'translate-y-0');
+                toast.classList.add('opacity-0', 'translate-y-2');
+            }, 1500);
+        }
+
+        let quietToastTimeout;
+        function triggerQuietSaveToast() {
+            const toast = document.getElementById('toast');
+            document.getElementById('toast-text').innerText = "✓ อัปเดตข้อมูลขึ้นคลาวด์ ToDo List แล้ว";
+            toast.classList.remove('opacity-0', 'translate-y-2');
+            toast.classList.add('opacity-100', 'translate-y-0');
+            
+            clearTimeout(quietToastTimeout);
+            quietToastTimeout = setTimeout(() => {
+                toast.classList.remove('opacity-100', 'translate-y-0');
+                toast.classList.add('opacity-0', 'translate-y-2');
+            }, 1000);
+        }
+
+        // Drag and drop event index trackers
+        let dragStartIndex;
+
+        function dragStart(e, index) {
+            dragStartIndex = index;
+            e.currentTarget.classList.add('dragging');
+            e.dataTransfer.effectAllowed = 'move';
+        }
+
+        function dragOver(e) {
+            e.preventDefault();
+        }
+
+        function dragEnd(e) {
+            e.currentTarget.classList.remove('dragging');
+        }
+
+        // Export active project specifications to .MD file
+        function exportToMarkdown() {
+            const activeProj = projects.find(p => p.id === activeProjectId);
+            if (!activeProj) return;
+
+            let mdSteps = '';
+            activeProj.steps.forEach((s, i) => {
+                let statusEmoji = '⚪ ยังไม่ได้ทำ';
+                if (s.status === 'doing') statusEmoji = '🟡 กำลังทำอยู่';
+                if (s.status === 'done') statusEmoji = '🟢 เสร็จสิ้นเรียบร้อย';
+
+                const days = calculateDuration(s.startDate, s.endDate);
+
+                mdSteps += `### BOX ${i+1}: ${s.title || '(ยังไม่มีชื่อ)'}\n`;
+                mdSteps += `- **สถานะ:** ${statusEmoji}\n`;
+                mdSteps += `- **กรอบเวลาปฏิบัติงาน:** ${s.startDate || '-'} ถึง ${s.endDate || '-'} (${days > 0 ? days + ' วัน' : 'ยังไม่ได้ระบุ'})\n`;
+                mdSteps += `- **รายละเอียด:** ${s.details || '-'}\n`;
+                if (s.status === 'done' && s.result) {
+                    mdSteps += `- **🎯 ผลลัพธ์ที่ได้จากการทำขั้นตอนนี้:** ${s.result}\n`;
+                }
+                mdSteps += `\n`;
+            });
+
+            const projTotalDays = calculateDuration(activeProj.startDate, activeProj.endDate);
+
+            const markdown = `# ${activeProj.emoji || '🚀'} ${activeProj.name || 'โปรเจกต์ใหม่'}
+- **สถานะโปรเจกต์รวม:** ${activeProj.projectStatus === 'completed' ? 'สำเร็จแล้ว 🏆' : 'กำลังดำเนินการ 📂'}\n
+- **กรอบเวลาจำกัดหลัก:** ${activeProj.startDate || '-'} ถึง ${activeProj.endDate || '-'} (${projTotalDays > 0 ? projTotalDays + ' วัน' : 'ยังไม่กำหนด'})\n
+- **คำอธิบาย:** ${activeProj.description || 'ไม่มีคำอธิบายโดยสังเขป'}
+
+---
+
+## 📌 แผนงานกระบวนการย่อย (Process Flow Timeline)
+
+${mdSteps}
+---
+*สร้างขึ้นและบันทึกอัตโนมัติจาก Creative Flow Sandbox (Cloud Mode)*`;
+
+            const dataUri = 'data:text/markdown;charset=utf-8,' + encodeURIComponent(markdown);
+            const anchor = document.createElement('a');
+            anchor.setAttribute('href', dataUri);
+            anchor.setAttribute('download', `${activeProj.name || 'project-flow'}.md`);
+            document.body.appendChild(anchor);
+            anchor.click();
+            anchor.remove();
+        }
+
+        // Expose functions to Global Scope for HTML Event Triggers [1]
+        window.createNewProject = createNewProject;
+        window.deleteProject = deleteProject;
+        window.selectProject = selectProject;
+        window.updateProjectHeader = updateProjectHeader;
+        window.updateProjectDates = updateProjectDates;
+        window.updateStepTitle = updateStepTitle;
+        window.updateStepDetails = updateStepDetails;
+        window.updateStepResult = updateStepResult;
+        window.updateStepStartDate = updateStepStartDate;
+        window.updateStepEndDate = updateStepEndDate;
+        window.setStepColor = setStepColor;
+        window.setStepStatus = setStepStatus;
+        window.addNewStep = addNewStep;
+        window.deleteStep = deleteStep;
+        window.setProjectStatus = setProjectStatus;
+        window.exportToMarkdown = exportToMarkdown;
+        window.dragStart = dragStart;
+        window.dragOver = dragOver;
+        window.drop = drop;
+        window.dragEnd = dragEnd;
+        window.goToBoard = goToBoard;
+
+        // Run application loading
+        initApp();
+    </script>
+</body>
+</html>
