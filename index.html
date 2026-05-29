@@ -35,8 +35,8 @@
 </head>
 <body class="text-zinc-900 min-h-screen flex flex-col">
 
-    <!-- Toast Save Notification -->
-    <div id="toast" class="fixed bottom-6 right-6 bg-zinc-900 text-white text-xs font-medium px-4 py-2.5 rounded-xl shadow-lg transition-all duration-300 opacity-0 translate-y-2 pointer-events-none z-50 flex items-center gap-1.5">
+    <!-- Toast Save Notification (ซ่อนไว้และไม่ทำงาน) -->
+    <div id="toast" class="hidden fixed bottom-6 right-6 bg-zinc-900 text-white text-xs font-medium px-4 py-2.5 rounded-xl shadow-lg transition-all duration-300 opacity-0 translate-y-2 pointer-events-none z-50 flex items-center gap-1.5">
         <span class="w-2 h-2 bg-emerald-500 rounded-full animate-ping"></span>
         <span id="toast-text">กำลังซิงก์ข้อมูล...</span>
     </div>
@@ -1027,6 +1027,7 @@
 
         let toastTimeout;
         function showToast(text = 'บันทึกความคืบหน้าแล้ว') {
+            return; // ปิดการแจ้งเตือนถาวร
             const toast = document.getElementById('toast');
             document.getElementById('toast-text').innerText = text;
             
@@ -1042,6 +1043,7 @@
 
         let quietToastTimeout;
         function triggerQuietSaveToast() {
+            return; // ปิดการแจ้งเตือนถาวร
             const toast = document.getElementById('toast');
             document.getElementById('toast-text').innerText = "✓ อัปเดตข้อมูลขึ้นคลาวด์ ToDo List แล้ว";
             toast.classList.remove('opacity-0', 'translate-y-2');
