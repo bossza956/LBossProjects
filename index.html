@@ -35,8 +35,8 @@
 </head>
 <body class="text-zinc-900 min-h-screen flex flex-col">
 
-    <!-- Toast Save Notification (ซ่อนไว้และไม่ทำงาน) -->
-    <div id="toast" class="hidden fixed bottom-6 right-6 bg-zinc-900 text-white text-xs font-medium px-4 py-2.5 rounded-xl shadow-lg transition-all duration-300 opacity-0 translate-y-2 pointer-events-none z-50 flex items-center gap-1.5">
+    <!-- Toast Save Notification -->
+    <div id="toast" class="fixed bottom-6 right-6 bg-zinc-900 text-white text-xs font-medium px-4 py-2.5 rounded-xl shadow-lg transition-all duration-300 opacity-0 translate-y-2 pointer-events-none z-50 flex items-center gap-1.5">
         <span class="w-2 h-2 bg-emerald-500 rounded-full animate-ping"></span>
         <span id="toast-text">กำลังซิงก์ข้อมูล...</span>
     </div>
@@ -113,8 +113,22 @@
             </div>
 
             <!-- Main Workspace Editor -->
-            <div id="workspace-area" class="space-y-8 max-w-3xl w-full mx-auto hidden">
+            <div id="workspace-area" class="space-y-6 max-w-3xl w-full mx-auto hidden">
                 
+                <!-- NEW: Workspace Header Toolbar with Save Button -->
+                <div class="flex flex-col sm:flex-row sm:items-center justify-between gap-4 pb-4 border-b border-zinc-200/80">
+                    <div>
+                        <h2 class="text-xs font-bold text-zinc-800 flex items-center gap-1.5">
+                            <span class="w-2.5 h-2.5 bg-amber-500 rounded-full animate-pulse"></span> 
+                            โหมดแก้ไขในเครื่อง (ประหยัด Usage คลาวด์)
+                        </h2>
+                        <p class="text-[11px] text-zinc-400">ระบบจะไม่สแปมเซฟทุกคำพิมพ์ กดบันทึกเมื่อเขียนทุกสเต็ปเสร็จสิ้น</p>
+                    </div>
+                    <button onclick="saveActiveProjectToCloud()" class="inline-flex items-center justify-center rounded-xl bg-emerald-600 hover:bg-emerald-700 px-4 py-2.5 text-xs font-bold text-white transition-all cursor-pointer shadow-md shadow-emerald-100 hover:shadow-emerald-200">
+                        <i data-lucide="cloud-lightning" class="w-4 h-4 mr-1.5"></i> บันทึกข้อมูลลง Cloud
+                    </button>
+                </div>
+
                 <!-- Project Identity & Main Timeline Card -->
                 <div class="bg-white border border-zinc-200/60 rounded-2xl p-6 shadow-sm space-y-4 relative overflow-hidden">
                     <div id="completion-ribbon" class="absolute top-0 right-0 bg-emerald-500 text-white text-[10px] font-bold px-3 py-1 rounded-bl-xl hidden flex items-center gap-1">
@@ -395,31 +409,15 @@
             }
         }
 
-        // อัปเดตและซิงก์สเตตัสโปรเจกต์เข้า Firestore
+        // ปรับเปลี่ยนสเตตัสแบบ Local ก่อน
         async function setProjectStatus(status) {
             const activeProj = projects.find(p => p.id === activeProjectId);
             if (activeProj) {
                 activeProj.projectStatus = status;
+                updateProjectStatusUI(status);
                 
-                try {
-                    updateSyncStatusIndicator("saving");
-                    const docRef = doc(db, "projects", activeProjectId);
-                    await updateDoc(docRef, { status: status });
-                    
-                    updateSyncStatusIndicator("cloud");
-                    showToast('เปลี่ยนสถานะและซิงก์โปรเจกต์แล้ว');
-                    
-                    if (status === 'completed') {
-                        const remainingActive = projects.find(p => p.projectStatus === 'active');
-                        if (remainingActive) {
-                            activeProjectId = remainingActive.id;
-                        }
-                    }
-                    await selectProject(activeProjectId);
-                } catch(e) {
-                    console.error("Status Sync Error: ", e);
-                    updateSyncStatusIndicator("local_error");
-                }
+                // ถ้าย้ายโปรเจกต์ไปเซ็กชันเสร็จสิ้น ย้ายสวิตช์ใน Sidebar ทันที
+                renderSidebar();
             }
         }
 
@@ -439,7 +437,7 @@
             }
         }
 
-        // สร้างโปรเจกต์ใหม่และซิงก์คลาวด์ [1]
+        // สร้างโปรเจกต์ใหม่และซิงก์คลาวด์ทันทีเพื่อจอง ID
         async function createNewProject() {
             const newProjData = {
                 status: "active",
@@ -469,7 +467,7 @@
                 activeProjectId = newProj.id;
                 
                 updateSyncStatusIndicator("cloud");
-                showToast("✓ สร้างโปรเจกต์สำเร็จและซิงก์ขึ้น Cloud!");
+                showToast("✓ สร้างโปรเจกต์ใหม่แล้ว!");
                 await selectProject(activeProjectId);
             } catch (err) {
                 console.error("Error creating project:", err);
@@ -516,6 +514,11 @@
 
         // ดึงข้อมูลขั้นตอนย่อย (Box) สดๆ จาก Collection 'tasks' คลาวด์ เพื่อให้ซิงก์แบบเรียลไทม์ 2 ทิศทาง [1]
         async function selectProject(id) {
+            // ระบบป้องกันข้อมูลสูญหาย: หากกำลังสลับโปรเจกต์ ให้เซฟข้อมูลเก่าแบบเงียบๆ ก่อน
+            if (activeProjectId && activeProjectId !== id) {
+                await saveActiveProjectToCloud(true);
+            }
+
             activeProjectId = id;
             if(!activeProjectId) {
                 renderAll();
@@ -570,6 +573,7 @@
             renderAll();
         }
 
+        // ฟังก์ชันแก้ไขข้อมูลแบบ Local-First (จำค่าในเครื่องก่อน ไม่พิมพ์กระตุก ไม่เปลือง Usage)
         async function updateProjectHeader() {
             const activeProj = projects.find(p => p.id === activeProjectId);
             if (activeProj) {
@@ -577,18 +581,8 @@
                 activeProj.name = document.getElementById('proj-name').value;
                 activeProj.description = document.getElementById('proj-desc').value;
                 
-                try {
-                    const docRef = doc(db, "projects", activeProjectId);
-                    await updateDoc(docRef, {
-                        emoji: activeProj.emoji,
-                        name: activeProj.name,
-                        description: activeProj.description
-                    });
-                    triggerQuietSaveToast();
-                    renderSidebar();
-                } catch(e) {
-                    console.error("Meta Sync Error: ", e);
-                }
+                // อัปเดต Sidebar ในเครื่องแบบ Realtime
+                renderSidebar();
             }
         }
 
@@ -601,158 +595,122 @@
                 const duration = calculateDuration(activeProj.startDate, activeProj.endDate);
                 document.getElementById('proj-duration-text').innerText = duration > 0 ? `${duration} วัน` : '- วัน';
                 
-                try {
-                    updateSyncStatusIndicator("saving");
-                    const docRef = doc(db, "projects", activeProjectId);
-                    await updateDoc(docRef, {
-                        startDate: activeProj.startDate,
-                        endDate: activeProj.endDate
-                    });
-                    updateSyncStatusIndicator("cloud");
-                    showToast('ปรับปรุงเวลาแผนงานหลักและล็อกกรอบปฏิทินแล้ว');
-                    renderSteps();
-                } catch(e) {
-                    console.error("Dates Sync Error: ", e);
-                    updateSyncStatusIndicator("local_error");
-                }
+                // อัปเดตความเชื่อมโยงปฏิทินของการ์ดในเครื่องทันที
+                renderSteps();
             }
         }
 
-        // จัดการซิงก์กล่องขั้นตอนย่อยไปยัง Tasks บนคลาวด์ [1, 2]
         async function updateStepTitle(index, val) {
             const activeProj = projects.find(p => p.id === activeProjectId);
             if (activeProj && activeProj.steps[index]) {
-                const step = activeProj.steps[index];
-                step.title = val;
-                
-                try {
-                    const taskRef = doc(db, "tasks", step.id);
-                    await updateDoc(taskRef, { title: val });
-                    triggerQuietSaveToast();
-                } catch(e) {
-                    console.error("Title sync failed: ", e);
-                }
+                activeProj.steps[index].title = val;
             }
         }
 
         async function updateStepDetails(index, val) {
             const activeProj = projects.find(p => p.id === activeProjectId);
             if (activeProj && activeProj.steps[index]) {
-                const step = activeProj.steps[index];
-                step.details = val;
-                
-                try {
-                    const taskRef = doc(db, "tasks", step.id);
-                    await updateDoc(taskRef, { desc: val }); // บันทึกลง desc ของการ์ดเดิม
-                    triggerQuietSaveToast();
-                } catch(e) {
-                    console.error("Desc sync failed: ", e);
-                }
+                activeProj.steps[index].details = val;
             }
         }
 
         async function updateStepResult(index, val) {
             const activeProj = projects.find(p => p.id === activeProjectId);
             if (activeProj && activeProj.steps[index]) {
-                const step = activeProj.steps[index];
-                step.result = val;
-                
-                try {
-                    const taskRef = doc(db, "tasks", step.id);
-                    await updateDoc(taskRef, { 
-                        followUpResult: val,
-                        requireFollowUp: true // ดึงขึ้น Outcomes Auto
-                    });
-                    triggerQuietSaveToast();
-                } catch(e) {
-                    console.error("Outcome sync failed: ", e);
-                }
+                activeProj.steps[index].result = val;
             }
         }
 
         async function updateStepStartDate(index, val) {
             const activeProj = projects.find(p => p.id === activeProjectId);
             if (activeProj && activeProj.steps[index]) {
-                const step = activeProj.steps[index];
-                step.startDate = val;
-                
-                try {
-                    const taskRef = doc(db, "tasks", step.id);
-                    await updateDoc(taskRef, { startDate: val });
-                    triggerQuietSaveToast();
-                    renderSteps();
-                } catch(e) {
-                    console.error("Start date sync failed: ", e);
-                }
+                activeProj.steps[index].startDate = val;
+                renderSteps();
             }
         }
 
-        // วันสิ้นสุดใน Sandbox จะซิงก์กับฟิลด์ 'date' ของ ToDoList เพื่อรันปฏิทินและ Overdue ร่วมกัน [2]
         async function updateStepEndDate(index, val) {
             const activeProj = projects.find(p => p.id === activeProjectId);
             if (activeProj && activeProj.steps[index]) {
-                const step = activeProj.steps[index];
-                step.endDate = val;
-                
-                try {
-                    const taskRef = doc(db, "tasks", step.id);
-                    await updateDoc(taskRef, { 
-                        endDate: val,
-                        date: val // ลิงก์ช่องวันที่ ToDo List
-                    });
-                    triggerQuietSaveToast();
-                    renderSteps();
-                } catch(e) {
-                    console.error("End date sync failed: ", e);
-                }
+                activeProj.steps[index].endDate = val;
+                renderSteps();
             }
         }
 
         async function setStepColor(index, color) {
             const activeProj = projects.find(p => p.id === activeProjectId);
             if (activeProj && activeProj.steps[index]) {
-                const step = activeProj.steps[index];
-                step.color = color;
-                
-                try {
-                    const taskRef = doc(db, "tasks", step.id);
-                    await updateDoc(taskRef, { color: color });
-                    triggerQuietSaveToast();
-                    renderSteps();
-                } catch(e) {
-                    console.error("Color sync failed: ", e);
-                }
+                activeProj.steps[index].color = color;
+                renderSteps();
             }
         }
 
-        // ปรับเปลี่ยนสถานะ Box จะแมปสเตตัสบอร์ดคัมบังของคุณให้ตรงกัน [2]
         async function setStepStatus(index, status) {
             const activeProj = projects.find(p => p.id === activeProjectId);
             if (activeProj && activeProj.steps[index]) {
-                const step = activeProj.steps[index];
-                step.status = status;
-                
-                let boardStatus = "todo";
-                if(status === "doing") boardStatus = "inprogress";
-                else if(status === "done") boardStatus = "done";
+                activeProj.steps[index].status = status;
+                renderSteps();
+            }
+        }
 
-                const isCompleted = (status === "done");
+        // ==========================================
+        //  NEW MAIN FUNCTION: MANUAL SAVE TO CLOUD
+        // ==========================================
+        async function saveActiveProjectToCloud(quiet = false) {
+            if (!activeProjectId) return;
+            const activeProj = projects.find(p => p.id === activeProjectId);
+            if (!activeProj) return;
 
-                try {
-                    updateSyncStatusIndicator("saving");
-                    const taskRef = doc(db, "tasks", step.id);
-                    await updateDoc(taskRef, { 
-                        status: boardStatus,
-                        requireFollowUp: isCompleted
-                    });
+            try {
+                if (!quiet) updateSyncStatusIndicator("saving");
+
+                // 1. ซิงก์รายละเอียดของหัวโปรเจกต์ตัวหลัก (1 Write Operation)
+                const docRef = doc(db, "projects", activeProjectId);
+                await updateDoc(docRef, {
+                    status: activeProj.projectStatus || "active",
+                    emoji: activeProj.emoji || "🚀",
+                    name: activeProj.name || "",
+                    description: activeProj.description || "",
+                    startDate: activeProj.startDate || "",
+                    endDate: activeProj.endDate || ""
+                });
+
+                // 2. ซิงก์ขั้นตอนย่อยทั้งหมด (Batch Write - ปรับปรุงทุกขั้นตอนพร้อมกันในครั้งเดียว)
+                if (activeProj.steps && activeProj.steps.length > 0) {
+                    const batch = writeBatch(db);
                     
-                    updateSyncStatusIndicator("cloud");
-                    showToast('ซิงก์สถานะงานเข้า ToDo List บอร์ดสำเร็จ!');
-                    renderSteps();
-                } catch(e) {
-                    console.error("Status Sync Error: ", e);
-                    updateSyncStatusIndicator("local_error");
+                    activeProj.steps.forEach((step) => {
+                        let boardStatus = "todo";
+                        if(step.status === "doing") boardStatus = "inprogress";
+                        else if(step.status === "done") boardStatus = "done";
+
+                        const isCompleted = (step.status === "done");
+                        const taskRef = doc(db, "tasks", step.id);
+
+                        batch.update(taskRef, {
+                            title: step.title || "",
+                            desc: step.details || "",
+                            status: boardStatus,
+                            startDate: step.startDate || "",
+                            endDate: step.endDate || "",
+                            date: step.endDate || "", // ลิงก์ ToDo List calendar
+                            color: step.color || "gray",
+                            requireFollowUp: isCompleted,
+                            followUpResult: step.result || "",
+                            stepOrder: step.stepOrder || 0
+                        });
+                    });
+
+                    await batch.commit();
                 }
+
+                if (!quiet) {
+                    updateSyncStatusIndicator("cloud");
+                    showToast('✓ บันทึกความคืบหน้าขึ้น Cloud สำเร็จ!');
+                }
+            } catch (e) {
+                console.error("Manual Save Error: ", e);
+                if (!quiet) updateSyncStatusIndicator("local_error");
             }
         }
 
@@ -760,6 +718,9 @@
         async function addNewStep() {
             const activeProj = projects.find(p => p.id === activeProjectId);
             if (!activeProj) return;
+
+            // ป้องกันข้อมูลหาย: เซฟข้อมูลล่าสุดในหน้าจอลงคลาวด์ก่อน
+            await saveActiveProjectToCloud(true);
 
             const nextOrder = (activeProj.steps ? activeProj.steps.length : 0) + 1;
             
@@ -784,7 +745,7 @@
                 const docRef = await addDoc(collection(db, "tasks"), newTaskData);
                 
                 updateSyncStatusIndicator("cloud");
-                showToast("✓ สร้างขั้นตอนและสร้างงานในบอร์ด ToDo List เรียบร้อย!");
+                showToast("✓ สร้างขั้นตอนสำเร็จแล้ว!");
                 await selectProject(activeProjectId);
             } catch(e) {
                 console.error("Error creating Task Step: ", e);
@@ -801,6 +762,10 @@
                         updateSyncStatusIndicator("saving");
                         await deleteDoc(doc(db, "tasks", step.id));
                         
+                        // เคลียร์ค่าฝั่ง Local
+                        activeProj.steps.splice(index, 1);
+                        await saveActiveProjectToCloud(true); // บันทึกความถูกต้องของลำดับการ์ดที่เหลือ
+
                         updateSyncStatusIndicator("cloud");
                         showToast("✖ ลบสเต็ปงานและล้างบอร์ดสำเร็จ");
                         await selectProject(activeProjectId);
@@ -821,19 +786,17 @@
                 activeProj.steps.splice(dragStartIndex, 1);
                 activeProj.steps.splice(index, 0, draggedItem);
                 
+                // จัดเรียงเลขลำดับสเต็ปใหม่
+                activeProj.steps.forEach((step, idx) => {
+                    step.stepOrder = idx + 1;
+                });
+
                 try {
                     updateSyncStatusIndicator("saving");
-                    const batch = writeBatch(db);
-                    
-                    activeProj.steps.forEach((step, idx) => {
-                        step.stepOrder = idx + 1;
-                        const taskRef = doc(db, "tasks", step.id);
-                        batch.update(taskRef, { stepOrder: step.stepOrder });
-                    });
-                    
-                    await batch.commit();
+                    await saveActiveProjectToCloud(true); // สั่งเขียนคลาวด์ทับทันที
+
                     updateSyncStatusIndicator("cloud");
-                    showToast("✓ สลับปรับเรียงเลขลำดับใน ToDoList สำเร็จ!");
+                    showToast("✓ สลับปรับเรียงเลขลำดับเรียบร้อย!");
                     renderSteps();
                 } catch(e) {
                     console.error("Batch Order Reorder Failed: ", e);
@@ -1027,7 +990,6 @@
 
         let toastTimeout;
         function showToast(text = 'บันทึกความคืบหน้าแล้ว') {
-            return; // ปิดการแจ้งเตือนถาวร
             const toast = document.getElementById('toast');
             document.getElementById('toast-text').innerText = text;
             
@@ -1043,9 +1005,8 @@
 
         let quietToastTimeout;
         function triggerQuietSaveToast() {
-            return; // ปิดการแจ้งเตือนถาวร
             const toast = document.getElementById('toast');
-            document.getElementById('toast-text').innerText = "✓ อัปเดตข้อมูลขึ้นคลาวด์ ToDo List แล้ว";
+            document.getElementById('toast-text').innerText = "✓ เซฟลงเครื่องแล้ว (อย่าลืมกดอัปโหลดขึ้นคลาวด์)";
             toast.classList.remove('opacity-0', 'translate-y-2');
             toast.classList.add('opacity-100', 'translate-y-0');
             
@@ -1142,6 +1103,7 @@ ${mdSteps}
         window.drop = drop;
         window.dragEnd = dragEnd;
         window.goToBoard = goToBoard;
+        window.saveActiveProjectToCloud = saveActiveProjectToCloud; // ส่งออกฟังก์ชันเซฟไปยัง Global HTML
 
         // Run application loading
         initApp();
